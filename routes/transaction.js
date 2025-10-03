@@ -94,7 +94,7 @@ router.get("/get-recycled-transactions", async (req, res) => {
 // ✅ Fetch only CASH transactions
 router.get("/get-cash-transactions", async (req, res) => {
   try {
-    const transactions = await Transactions.find({ transactionType: "cash" })
+    const transactions = await Transactions.find({ transactionType: "cash" ,  recycled: false})
       .populate("productType");
     res.json({ success: true, transactions });
   } catch (err) {
@@ -105,7 +105,7 @@ router.get("/get-cash-transactions", async (req, res) => {
 // ✅ Fetch only INSTALMENT transactions
 router.get("/get-instalment-transactions", async (req, res) => {
   try {
-    const transactions = await Transactions.find({ transactionType: "instalments" })
+    const transactions = await Transactions.find({ transactionType: "instalments" ,   recycled: false})
       .populate("productType");
     res.json({ success: true, transactions });
   } catch (err) {
@@ -117,7 +117,8 @@ router.get("/get-pending-instalment-transactions", async (req, res) => {
   try {
     const transactions = await Transactions.find({
       transactionType: "instalments",
-      "installments.status": "Pending"  // check if any instalment is pending
+      "installments.status": "Pending"  // check if any instalment is pending,
+      ,  recycled: false
     }).populate("productType");
 
     res.json({ success: true, transactions });
@@ -131,7 +132,8 @@ router.get("/get-fully-paid-instalment-transactions", async (req, res) => {
       transactionType: "instalments",
       installments: {
         $not: { $elemMatch: { status: { $ne: "Paid" } } }
-      }
+      },  recycled: false
+      
     }).populate("productType");
 
     res.json({ success: true, transactions });
@@ -144,6 +146,7 @@ router.get("/get-due-instalment-transactions", async (req, res) => {
     const transactions = await Transactions.find({
       transactionType: "instalments",
       "installments.status": "Due"  // check if any instalment is pending
+      ,recycled: false
     }).populate("productType");
 
     res.json({ success: true, transactions });
