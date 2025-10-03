@@ -14,7 +14,7 @@ const transactionSchema = new mongoose.Schema(
     },
     cnicNumber: {
       type: String,
-      required: true,
+      
       
     },
     address: {
@@ -29,20 +29,20 @@ const transactionSchema = new mongoose.Schema(
     
     granterFullName: {
       type: String,
-      required: true,
+     
       
     },
     granterContactNumber: {
       type: String,
-      required: true,
+     
     },
     granterCnicNumber: {
       type: String,
-      required: true,
+     
     },
     granterAddress: {
       type: String,
-      required: true,
+     
     },
     granterImage: {
         type: String, 
