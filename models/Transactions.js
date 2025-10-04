@@ -16,6 +16,7 @@ const transactionSchema = new mongoose.Schema(
       type: String,
       
       
+      
     },
     address: {
       type: String,
@@ -87,7 +88,7 @@ const transactionSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-   date: { type: Date, default: Date.now }
+   date: { type: Date, default: Date.now }
   },
   {
     timestamps: true, 
