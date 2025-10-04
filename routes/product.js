@@ -97,7 +97,16 @@ router.delete("/deleted-product/:id", async (req, res) => {
 
 router.get("/get-product", async (req, res) => {
   try {
-    const products = await Product.find();
+    const products = await Product.find({ sold: false });
+    res.json(products);
+  } catch (err) {
+    console.error("Error fetching products:", err.message);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+router.get("/get-sold-product", async (req, res) => {
+  try {
+    const products = await Product.find({ sold: true });
     res.json(products);
   } catch (err) {
     console.error("Error fetching products:", err.message);

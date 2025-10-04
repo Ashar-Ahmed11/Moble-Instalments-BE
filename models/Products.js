@@ -37,6 +37,11 @@ const productSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+     sold : {
+      type: Boolean,
+      default: false,
+    },
+    date: { type: Date, default: Date.now }
   },
   {
     timestamps: true,
