@@ -112,6 +112,19 @@ router.get("/get-instalment-transactions", async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+router.get("/get-pending-due-instalment-transactions", async (req, res) => {
+  try {
+    const transactions = await Transactions.find({
+      transactionType: "instalments",
+      "installments.status": { $in: ["Pending", "Due"] },
+      recycled: false,  
+    }).populate("productType");
+
+    res.json({ success: true, transactions });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 router.get("/get-pending-instalment-transactions", async (req, res) => {
   try {
@@ -126,6 +139,7 @@ router.get("/get-pending-instalment-transactions", async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
 router.get("/get-fully-paid-instalment-transactions", async (req, res) => {
   try {
     const transactions = await Transactions.find({
