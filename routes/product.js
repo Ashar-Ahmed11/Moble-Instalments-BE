@@ -14,7 +14,9 @@ router.post("/create-products", async (req, res) => {
       mobileIMEI1,
       mobileIMEI2,
       wholesalePrice,
+      date,
     } = req.body;
+// console.log("📩 Received from frontend:", req.body);
 
     // Required fields check
     if (
@@ -38,6 +40,7 @@ router.post("/create-products", async (req, res) => {
       mobileIMEI1,
       mobileIMEI2,
       wholesalePrice,
+      date,
     });
 
     // Save product to DB
