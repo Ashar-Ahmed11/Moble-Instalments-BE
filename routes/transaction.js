@@ -40,6 +40,25 @@ router.put("/update-transactions/:id", async (req, res) => {
       { new: true } // return updated doc & run schema validators
     );
 
+    const checkInstalmentDue = async () => {
+      const myHeaders = new Headers();
+      myHeaders.append("Content-Type", "application/json");
+      // const response = await fetch("https://mobileinstalmentex-dot-arched-gear-433017-u9.de.r.appspot.com/api/transaction/checkInstalmentDue", {
+
+      const response = await fetch("https://mobileinstalmentex-dot-arched-gear-433017-u9.de.r.appspot.com/api/transaction/checkInstalmentDue", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+      
+
+      });
+
+      const result = await response.json()
+      console.log(result);
+
+    }
+    checkInstalmentDue()
     if (!updatedTransaction) {
       return res.status(404).json({ success: false, message: "Transaction not found" });
     }
@@ -94,7 +113,7 @@ router.get("/get-recycled-transactions", async (req, res) => {
 // ✅ Fetch only CASH transactions
 router.get("/get-cash-transactions", async (req, res) => {
   try {
-    const transactions = await Transactions.find({ transactionType: "cash" ,  recycled: false})
+    const transactions = await Transactions.find({ transactionType: "cash", recycled: false })
       .populate("productType");
     res.json({ success: true, transactions });
   } catch (err) {
@@ -105,7 +124,7 @@ router.get("/get-cash-transactions", async (req, res) => {
 // ✅ Fetch only INSTALMENT transactions
 router.get("/get-instalment-transactions", async (req, res) => {
   try {
-    const transactions = await Transactions.find({ transactionType: "instalments" ,   recycled: false})
+    const transactions = await Transactions.find({ transactionType: "instalments", recycled: false })
       .populate("productType");
     res.json({ success: true, transactions });
   } catch (err) {
@@ -117,7 +136,7 @@ router.get("/get-pending-due-instalment-transactions", async (req, res) => {
     const transactions = await Transactions.find({
       transactionType: "instalments",
       "installments.status": { $in: ["Pending", "Due"] },
-      recycled: false,  
+      recycled: false,
     }).populate("productType");
 
     res.json({ success: true, transactions });
@@ -131,7 +150,7 @@ router.get("/get-pending-instalment-transactions", async (req, res) => {
     const transactions = await Transactions.find({
       transactionType: "instalments",
       "installments.status": "Pending"  // check if any instalment is pending,
-      ,  recycled: false
+      , recycled: false
     }).populate("productType");
 
     res.json({ success: true, transactions });
@@ -146,8 +165,8 @@ router.get("/get-fully-paid-instalment-transactions", async (req, res) => {
       transactionType: "instalments",
       installments: {
         $not: { $elemMatch: { status: { $ne: "Paid" } } }
-      },  recycled: false
-      
+      }, recycled: false
+
     }).populate("productType");
 
     res.json({ success: true, transactions });
@@ -160,7 +179,7 @@ router.get("/get-due-instalment-transactions", async (req, res) => {
     const transactions = await Transactions.find({
       transactionType: "instalments",
       "installments.status": "Due"  // check if any instalment is pending
-      ,recycled: false
+      , recycled: false
     }).populate("productType");
 
     res.json({ success: true, transactions });
@@ -168,6 +187,84 @@ router.get("/get-due-instalment-transactions", async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+router.post("/checkInstalmentDue", async (req, res) => {
+  try {
+    const transactions = await Transactions.find({
+      transactionType: "instalments",
+      "installments.status": { $in: ["Pending", "Due"] },
+      recycled: false,
+    }).populate("productType");
+
+    const currentDate = new Date();
+
+    // Helper function to format date as dd mm yy
+    const formatDate = (date) => {
+      const d = new Date(date);
+      const day = d.getDate();
+      const month = d.getMonth() + 1; // months are 0-indexed
+      const year = d.getFullYear();
+      return `${day}-${month}-${year}`;
+    };
+
+
+    const formattedCurrentDate = formatDate(currentDate);
+    const priceConverter = (_amount) => {
+      let convertedAmount = _amount.toLocaleString("en-US", {
+        style: "currency", currency: "PKR", minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      })
+      return convertedAmount
+    }
+    const sendSMS = async (recepient, transactionID, username, dueInstalmentAmount) => {
+      const myHeaders = new Headers();
+      myHeaders.append("Content-Type", "application/json");
+
+      const response = await fetch("https://api.textbee.dev/api/v1/gateway/devices/68e7de9fc2046740cee639a8/send-sms", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "392b0067-2f8b-4f9f-9acf-37c9ac8dd092"
+        },
+        body: JSON.stringify({
+          recipients: [recepient],
+          message:
+            `Hello ${username}\nYour Due Instalment Amount is ${dueInstalmentAmount}\nPlease visit the following URL to view your receipt:\nhttps://kamran-mobile-zone.web.app/pdf/${transactionID}`
+        }),
+
+      });
+
+    }
+
+    for (let i = 0; i < transactions.length; i++) {
+      const transaction = transactions[i];
+      const { installments } = transaction;
+
+      for (let j = 0; j < installments.length; j++) {
+        const inst = installments[j];
+        const instDate = new Date(inst.date);
+
+        const formattedDueDate = formatDate(instDate);
+
+        // Compare dates (only day, month, year)
+        if (formattedCurrentDate === formattedDueDate && inst.status === "Pending") {
+          inst.status = "Due";
+          sendSMS(transaction.contactNumber, transaction._id, transaction.fullName, priceConverter(inst.amount))
+        }
+      }
+
+      // Save the transaction after updating installment statuses
+      await transaction.save()
+    }
+
+    res.json({ success: true, message: "Due installments updated successfully." });
+  } catch (err) {
+    console.error("Error updating installments:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
 
 
 
