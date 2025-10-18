@@ -220,11 +220,11 @@ router.post("/checkInstalmentDue", async (req, res) => {
       const myHeaders = new Headers();
       myHeaders.append("Content-Type", "application/json");
 
-      const response = await fetch("https://api.textbee.dev/api/v1/gateway/devices/68e7de9fc2046740cee639a8/send-sms", {
+      const response = await fetch("https://api.textbee.dev/api/v1/gateway/devices/68f3af156a418a16ecaee68b/send-sms", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": "392b0067-2f8b-4f9f-9acf-37c9ac8dd092"
+          "x-api-key": "cb78930d-397a-418d-a0c1-a42c989e428c"
         },
         body: JSON.stringify({
           recipients: [recepient],
