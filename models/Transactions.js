@@ -95,6 +95,14 @@ const transactionSchema = new mongoose.Schema(
   }
 );
 
+// Index to speed due checker queries
+transactionSchema.index({
+  transactionType: 1,
+  recycled: 1,
+  "installments.status": 1,
+  "installments.date": 1,
+});
+
 module.exports = mongoose.model("Transaction",transactionSchema);
 
 

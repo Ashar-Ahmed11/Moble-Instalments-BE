@@ -190,74 +190,76 @@ router.get("/get-due-instalment-transactions", async (req, res) => {
 
 router.post("/checkInstalmentDue", async (req, res) => {
   try {
-    const transactions = await Transactions.find({
+    const now = new Date();
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    // Only fetch instalment transactions that have at least one Pending instalment due today or earlier
+    const filter = {
       transactionType: "instalments",
-      "installments.status": { $in: ["Pending", "Due"] },
       recycled: false,
-    }).populate("productType");
-
-    const currentDate = new Date();
-
-    // Helper function to format date as dd mm yy
-    const formatDate = (date) => {
-      const d = new Date(date);
-      const day = d.getDate();
-      const month = d.getMonth() + 1; // months are 0-indexed
-      const year = d.getFullYear();
-      return `${day}-${month}-${year}`;
+      installments: { $elemMatch: { status: "Pending", date: { $lte: todayEnd } } }
     };
 
+    // Minimal projection and lean() for speed
+    const candidates = await Transactions.find(
+      filter,
+      { fullName: 1, contactNumber: 1, installments: 1 }
+    ).lean();
 
-    const formattedCurrentDate = formatDate(currentDate);
-    const priceConverter = (_amount) => {
-      let convertedAmount = _amount.toLocaleString("en-US", {
-        style: "currency", currency: "PKR", minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-      })
-      return convertedAmount
-    }
-    const sendSMS = async (recepient, transactionID, username, dueInstalmentAmount) => {
-      const myHeaders = new Headers();
-      myHeaders.append("Content-Type", "application/json");
+    const priceConverter = (amount) => {
+      const value = Number(amount);
+      if (!Number.isFinite(value)) return "PKR 0";
+      return value.toLocaleString("en-US", { style: "currency", currency: "PKR", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    };
 
-      const response = await fetch("https://api.textbee.dev/api/v1/gateway/devices/68f3af156a418a16ecaee68b/send-sms", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "cb78930d-397a-418d-a0c1-a42c989e428c"
-        },
-        body: JSON.stringify({
-          recipients: [recepient],
-          message:
-            `Hello ${username}\nYour Due Instalment Amount is ${dueInstalmentAmount}\nPlease visit the following URL to view your receipt:\nhttps://kamran-mobile-zone.web.app/pdf/${transactionID}`
-        }),
-
-      });
-
-    }
-
-    for (let i = 0; i < transactions.length; i++) {
-      const transaction = transactions[i];
-      const { installments } = transaction;
-
-      for (let j = 0; j < installments.length; j++) {
-        const inst = installments[j];
-        const instDate = new Date(inst.date);
-
-        const formattedDueDate = formatDate(instDate);
-
-        // Compare dates (only day, month, year)
-        if (formattedCurrentDate === formattedDueDate && inst.status === "Pending") {
-          inst.status = "Due";
-          sendSMS(transaction.contactNumber, transaction._id, transaction.fullName, priceConverter(inst.amount))
+    // Prepare SMS jobs (only for installments that are actually due now)
+    const smsJobs = [];
+    for (const t of candidates) {
+      for (const inst of t.installments) {
+        if (inst.status === "Pending" && new Date(inst.date) <= todayEnd) {
+          smsJobs.push({
+            recepient: t.contactNumber,
+            transactionID: t._id,
+            username: t.fullName,
+            dueInstalmentAmount: priceConverter(inst.amount),
+          });
         }
       }
-
-      // Save the transaction after updating installment statuses
-      await transaction.save()
     }
 
-    res.json({ success: true, message: "Due installments updated successfully." });
+    // Fire-and-forget SMS sending in parallel (do not block response)
+    if (smsJobs.length) {
+      setImmediate(() => {
+        Promise.allSettled(
+          smsJobs.map((j) =>
+            fetch("https://api.textbee.dev/api/v1/gateway/devices/68f3af156a418a16ecaee68b/send-sms", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-api-key": "cb78930d-397a-418d-a0c1-a42c989e428c",
+              },
+              body: JSON.stringify({
+                recipients: [j.recepient],
+                message:
+                  `Hello ${j.username}\nYour Due Instalment Amount is ${j.dueInstalmentAmount}\nPlease visit the following URL to view your receipt:\nhttps://kamran-mobile-zone.web.app/pdf/${j.transactionID}`,
+              }),
+            })
+          )
+        ).catch(() => { /* ignore background errors */ });
+      });
+    }
+
+    // Bulk update: mark all matching Pending installments as Due
+    const updateResult = await Transactions.updateMany(
+      filter,
+      { $set: { "installments.$[el].status": "Due" } },
+      { arrayFilters: [{ "el.status": "Pending", "el.date": { $lte: todayEnd } }] }
+    );
+
+    const matched = updateResult.matchedCount ?? updateResult.nMatched ?? 0;
+    const modified = updateResult.modifiedCount ?? updateResult.nModified ?? 0;
+
+    res.json({ success: true, matched, modified });
   } catch (err) {
     console.error("Error updating installments:", err);
     res.status(500).json({ success: false, message: err.message });
